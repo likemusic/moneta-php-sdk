@@ -2,6 +2,9 @@
 
 namespace Moneta;
 
+use Moneta;
+
+
 class MonetaSdkUtils
 {
     /**
@@ -16,7 +19,6 @@ class MonetaSdkUtils
      * ini Files
      */
 	const INI_FILE_BASIC_SETTINGS 		= "basic_settings.ini";
-    const INI_FILE_KASSA_SETTINGS 		= "kassa_settings.ini";
 	const INI_FILE_DATA_STORAGE 		= "data_storage.ini";
 	const INI_FILE_PAYMENT_SYSTEMS 		= "payment_systems.ini";
 	const INI_FILE_PAYMENT_URLS 		= "payment_urls.ini";
@@ -31,7 +33,6 @@ class MonetaSdkUtils
 	const EXCEPTION_NO_INI_FILE 		= ".ini file not found: ";
 	const EXCEPTION_NO_VIEW_FILE 		= "view file not found: ";
 	const EXCEPTION_NO_VALUE_IN_ARRAY 	= "no vallue in array: ";
-    const EXCEPTION_NO_CERT_FILE 		= ".pem cert file not found: ";
 
     /**
      * Date format
@@ -56,7 +57,6 @@ class MonetaSdkUtils
         $iniFilesPath = $configPath ? $configPath : __DIR__ . self::INI_FILES_PATH;
 
 		$arBasicSettings 	= self::getSettingsFromIniFile($iniFilesPath . self::INI_FILE_BASIC_SETTINGS);
-        $arKassaSettings 	= self::getSettingsFromIniFile($iniFilesPath . self::INI_FILE_KASSA_SETTINGS);
 		$arDataStorage 		= self::getSettingsFromIniFile($iniFilesPath . self::INI_FILE_DATA_STORAGE);
 		$arPaymentSystems 	= self::getSettingsFromIniFile($iniFilesPath . self::INI_FILE_PAYMENT_SYSTEMS);
 		$arPaymentUrls 		= self::getSettingsFromIniFile($iniFilesPath . self::INI_FILE_PAYMENT_URLS);
@@ -65,7 +65,7 @@ class MonetaSdkUtils
         $arAdditionalFields	= self::getSettingsFromIniFile($iniFilesPath . self::INI_FILE_ADDITIONAL_FIELDS);
         $arRegularPayments	= self::getSettingsFromIniFile($iniFilesPath . self::INI_FILE_REGULAR_PAYMENTS);
 
-		return array_merge($arBasicSettings, $arKassaSettings, $arDataStorage, $arPaymentSystems, $arPaymentUrls, $arSuccessFailUrls, $arErrorTexts, $arAdditionalFields, $arRegularPayments);
+		return array_merge($arBasicSettings, $arDataStorage, $arPaymentSystems, $arPaymentUrls, $arSuccessFailUrls, $arErrorTexts, $arAdditionalFields, $arRegularPayments);
 	}
 
     /**
@@ -96,11 +96,11 @@ class MonetaSdkUtils
      */
 	public static function getValueFromArray($value, $array)
 	{
-	    $res = false;
-        if (isset($array[$value])) {
-            $res = $array[$value];
-        }
-		return $res;
+		if (!isset($array[$value])) {
+			throw new MonetaSdkException(self::EXCEPTION_NO_VALUE_IN_ARRAY . $value);
+		}
+
+		return $array[$value];
 	}
 
     /**
@@ -112,7 +112,7 @@ class MonetaSdkUtils
 	public static function requireView($viewName, $data, $externalPath = null)
 	{
         $result = false;
-        if ($externalPath && $externalPath != '') {
+        if (!$externalPath && $externalPath != '') {
             $viewFileName = __DIR__ . $externalPath . $viewName . '.php';
         }
         else {
@@ -174,7 +174,7 @@ class MonetaSdkUtils
 		$result = null;
 		if ($cookieName && isset($_COOKIE['mnt_data']) && $_COOKIE['mnt_data']) {
 			$cookieMntSerializedData = $_COOKIE['mnt_data'];
-			$cookieMntData = @unserialize($cookieMntSerializedData);
+			$cookieMntData = json_decode($cookieMntSerializedData, true);
 			if (isset($cookieMntData[$cookieName]) && $cookieMntData[$cookieName]) {
 				$result = $cookieMntData[$cookieName];
 			}
@@ -200,14 +200,14 @@ class MonetaSdkUtils
 		$cookieMntData = null;
 		if (isset($_COOKIE['mnt_data']) && $_COOKIE['mnt_data']) {
 			$cookieMntSerializedData = $_COOKIE['mnt_data'];
-			$cookieMntData = @unserialize($cookieMntSerializedData);
+			$cookieMntData = json_decode($cookieMntSerializedData, true);
 		}
 		if (!$cookieMntData) {
 			$cookieMntData = array();
 		}
 		$cookieMntData[$cookieName] = $cookieValue;
         $cookieMntData = array_merge($cookieMntData, self::$redirectArray);
-		setcookie('mnt_data', serialize($cookieMntData));
+		setcookie('mnt_data', json_encode($cookieMntData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
 
 		return true;
 	}
@@ -239,8 +239,6 @@ class MonetaSdkUtils
      */
 	public static function addToLog($message)
 	{
-        return false;
-
 		$errorHandlerFileName = __DIR__ . self::LOGS_FILES_PATH . date("Ymd").".txt";
         $result = null;
         if (substr(sprintf('%o', fileperms(__DIR__ . self::LOGS_FILES_PATH)), -4) != '0777') {
@@ -315,220 +313,5 @@ class MonetaSdkUtils
 
         return $result;
     }
-
-    /**
-     * @param $string
-     * @return string
-     */
-    public static function convertEscapedUnicode($string = '')
-    {
-        $strName = (string)$string;
-        $strName = preg_replace_callback('/u([0-9a-fA-F]{4})/', function ($match) {
-            return mb_convert_encoding(pack('H*', $match[1]), 'UTF-8', 'UCS-2BE');
-        }, $strName);
-        return $strName = str_replace('\\', '', $strName);
-    }
-
-    /**
-     * @param $string
-     * @param $string
-     * @return array
-     */
-    public static function prepareCustomerContact($phone = null, $email = null, $returnSettings = array())
-    {
-        $returnSettings['phone_without_contry_code'] = isset($returnSettings['phone_without_contry_code']) ? (bool)$returnSettings['phone_without_contry_code'] : false;
-        $returnSettings['phone_without_sign'] = isset($returnSettings['phone_without_sign']) ? (bool)$returnSettings['phone_without_sign'] : false;
-        if (!$phone && $email && strpos($email, '@') === false) {
-            //в $email содержится номер телефона
-            $phone = $email;
-            $email = null;
-        }
-        if ($phone) {
-            // формат нужен +7-ххх-ххх-хххх
-            $pattern = "/[^0-9]/i";
-            $phone = preg_replace($pattern, "", $phone);
-            // код страны - 7: Россия
-            if (preg_match("/^[78]9/i", $phone)) {
-                $phone = preg_replace("/^8/i", "7", $phone);  // если первая цифра номера «8», то заменим ее на «7»
-            }
-
-            if (preg_match("/^9/i", $phone) && strlen($phone) == 10) {
-                $phone = "7" . $phone;
-            }
-
-            if(!$returnSettings['phone_without_sign']){
-                $phone = '+' . $phone;
-            }
-
-            if($returnSettings['phone_without_contry_code']) {
-                $phone = preg_replace("/^\+7/i", "", $phone);  // убираем +7 и оставляем только 10 цифр
-            }
-        }
-        return array('phone' => $phone, 'email' => $email);
-    }
-
-    /**
-     * Автоматическое определение значения для параметра чека - "признак рассчёта"
-     * (обычно определяется для каждой позиции в чеке)
-     *
-     * @param String $positionName текстовое название позиции из чека
-     * @param {} $subjects набор всевозможных признаков рассчёта(набор уникален для каждой кассы)
-     *
-     * @return string
-     */
-    public static function autodetectPositionSubject(String $positionName = null, $subjects)
-    {
-        if (false !== mb_stripos($positionName, 'услуг')) {
-            $paymentObject = $subjects::SERVICE;
-        } elseif (false !== mb_stripos($positionName, 'сервис')) {
-            $paymentObject = $subjects::SERVICE;
-        } elseif (false !== mb_stripos($positionName, 'рабо')) {
-            $paymentObject = $subjects::WORK;
-        } else {
-            $paymentObject = $subjects::PRODUCT;
-        }
-
-        return $paymentObject;
-    }
-
-    /**
-     * Округляет число до необходимой точности
-     *
-     * @param string $number Число для округления
-     * @param int $scale Точность, до которой необходимо округлить число
-     *
-     * @return string
-     */
-    public static function bcround($number, $scale = 0)
-    {
-        if ($scale < 0) $scale = 0;
-        $sign = '';
-        if (bccomp('0', $number, 64) == 1) $sign = '-';
-        $increment = $sign . '0.' . str_repeat('0', $scale) . '5';
-        $number = bcadd($number, $increment, $scale + 1);
-
-        return bcadd($number, '0', $scale);
-    }
-
-
-    public static function parseJson($json)
-    {
-        // убрать переносы строк если есть
-        $json = str_replace(array("n    ", "\n", "\t", "\r"), "", $json);
-        $json = str_replace("n}", "}", $json);
-        $json = preg_replace('!\s+!', ' ', $json);
-        $json = str_replace(array("\\u00ab", "\\u00bb"), '', $json);
-        $json = str_replace(array("u00ab", "u00bb"), '', $json);
-        $json = trim($json);
-
-        // распарсить json
-        $data = @json_decode($json, true);
-        if ($data === null && json_last_error() !== JSON_ERROR_NONE) {
-            $json = trim(preg_replace("/&?[a-z0-9]+;/i", "", $json));
-            $data = @json_decode($json, true);
-            if ($data === null && json_last_error() !== JSON_ERROR_NONE) {
-                // убрать слэши
-                $json = str_replace("\\", "", $json);
-                $data = @json_decode($json, true);
-                if ($data === null && json_last_error() !== JSON_ERROR_NONE) {
-                    // убрать кавычки
-                    $elt = '"name":';
-                    if (strpos($json, $elt) !== false) {
-                        $eltJson = explode($elt, $json);
-                        $isClosedQuotes = false;
-                        foreach ($eltJson as $eltJsonKey => $eltJsonVal) {
-                            if ($eltJsonKey > 0) {
-                                $eltStrJson = explode(',', $eltJsonVal);
-
-                                if (count($eltStrJson)) {
-                                    foreach ($eltStrJson as $eltStrJsonKey => $eltStrJsonVal) {
-
-                                        $firstQuote = false;
-                                        $lastQuote = false;
-                                        $lastQuoteAndSkobka = false;
-                                        $lastQuoteAndDoubleSkobka = false;
-                                        $lastQuoteAndDoubleSkobkaDouble = false;
-
-                                        $srchElt = ['quantity', 'vat', 'price', 'money',
-                                            'sum', 'signature', 'client', 'inn', 'MNT',
-                                            'pm', 'po', 'markCode', 'agent_info'];
-
-                                        $isName = true;
-                                        foreach ($srchElt as $oneElt) {
-                                            if (strpos($eltStrJsonVal, $oneElt)) {
-                                                $isName = false;
-                                                break;
-                                            }
-                                        }
-
-                                        if (!$isName) {
-                                            $isClosedQuotes = false;
-                                        }
-
-                                        if (isset($eltStrJsonVal[0]) && $eltStrJsonVal[0] == '"') {
-                                            $firstQuote = true;
-                                        }
-
-                                        if (mb_substr($eltStrJsonVal, -4) == '"}}]') {
-                                            $lastQuoteAndDoubleSkobkaDouble = true;
-                                        } else if (mb_substr($eltStrJsonVal, -3) == '"}]') {
-                                            $lastQuoteAndDoubleSkobka = true;
-                                        } else if (mb_substr($eltStrJsonVal, -2) == '"}') {
-                                            $lastQuoteAndSkobka = true;
-                                        } else if (mb_substr($eltStrJsonVal, -1) == '"') {
-                                            $lastQuote = true;
-                                        }
-
-                                        if ($isName && $isClosedQuotes) {
-                                            unset($eltStrJson[$eltStrJsonKey]);
-                                        } else if ($isName) {
-                                            $eltStrJson[$eltStrJsonKey] = str_replace(['"}}]', '"}]', '"}', '"', "'"], '', $eltStrJson[$eltStrJsonKey]);
-                                            if ($firstQuote) {
-                                                $eltStrJson[$eltStrJsonKey] = '"' . $eltStrJson[$eltStrJsonKey];
-                                            }
-                                            if ($lastQuote) {
-                                                $eltStrJson[$eltStrJsonKey] = $eltStrJson[$eltStrJsonKey] . '"';
-                                            }
-                                            if ($lastQuoteAndSkobka) {
-                                                $eltStrJson[$eltStrJsonKey] = $eltStrJson[$eltStrJsonKey] . '"}';
-                                            }
-                                            if ($lastQuoteAndDoubleSkobka) {
-                                                $eltStrJson[$eltStrJsonKey] = $eltStrJson[$eltStrJsonKey] . '"}]';
-                                            }
-                                            if ($lastQuoteAndDoubleSkobkaDouble) {
-                                                $eltStrJson[$eltStrJsonKey] = $eltStrJson[$eltStrJsonKey] . '"}}]';
-                                            }
-
-                                            if ($firstQuote && ($lastQuote || $lastQuoteAndSkobka || $lastQuoteAndDoubleSkobka || $lastQuoteAndDoubleSkobkaDouble)) {
-                                                $isClosedQuotes = true;
-                                            }
-
-                                        }
-
-                                    }
-
-                                }
-
-                                $eltJson[$eltJsonKey] = implode(',', $eltStrJson);
-                            }
-                        }
-
-                        $cluedJson = implode($elt, $eltJson);
-                        $json = $cluedJson;
-
-                    }
-
-                    $data = @json_decode($json, true);
-
-                }
-
-            }
-
-        }
-
-        return $data;
-
-    }
-
 
 }
