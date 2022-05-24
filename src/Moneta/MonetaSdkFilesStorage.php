@@ -2,6 +2,8 @@
 
 namespace Moneta;
 
+use Moneta;
+
 class MonetaSdkFilesStorage implements MonetaSdkStorage
 {
     const EXCEPTION_NO_FILE = 'Data file is not available: ';
@@ -55,7 +57,7 @@ class MonetaSdkFilesStorage implements MonetaSdkStorage
     {
         $sourceArray = $this->getSourceArray();
         $destinationArray = array_merge($sourceArray, array('invoice_' . time() => $invoiceData));
-        file_put_contents($this->fileName, serialize($destinationArray));
+        file_put_contents($this->fileName, json_encode($destinationArray, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
     }
 
     /**
@@ -77,7 +79,7 @@ class MonetaSdkFilesStorage implements MonetaSdkStorage
                 }
                 $destinationArray[$sourceItemKey] = $destinationItem;
             }
-            file_put_contents($this->fileName, serialize($destinationArray));
+            file_put_contents($this->fileName, json_encode($destinationArray, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
         }
     }
 
@@ -133,26 +135,6 @@ class MonetaSdkFilesStorage implements MonetaSdkStorage
             foreach ($sourceArray AS $sourceItemKey => $sourceItem) {
                 if (isset($sourceItem['invoiceId']) && $operationId == $sourceItem['invoiceId']) {
                     $result = $sourceItem;
-                    break;
-                }
-            }
-        }
-
-        return $result;
-    }
-
-    /**
-     * @param $orderId
-     * @return
-     */
-    public function getOperationIdByOrderId($orderId)
-    {
-        $result = null;
-        $sourceArray = $this->getSourceArray();
-        if (is_array($sourceArray) && count($sourceArray)) {
-            foreach ($sourceArray AS $sourceItemKey => $sourceItem) {
-                if (isset($sourceItem['orderId']) && $orderId == $sourceItem['orderId']) {
-                    $result = $sourceItem['invoiceId'];
                     break;
                 }
             }
@@ -224,7 +206,7 @@ class MonetaSdkFilesStorage implements MonetaSdkStorage
         $fileContent = file_get_contents($this->fileName);
         $sourceArray = null;
         if ($fileContent) {
-            $sourceArray = @unserialize($fileContent);
+            $sourceArray = json_decode($fileContent, true);
         }
         if (!$sourceArray) {
             $sourceArray = array();
