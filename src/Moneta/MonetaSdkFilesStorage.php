@@ -2,8 +2,6 @@
 
 namespace Moneta;
 
-use Moneta;
-
 class MonetaSdkFilesStorage implements MonetaSdkStorage
 {
     const EXCEPTION_NO_FILE = 'Data file is not available: ';
