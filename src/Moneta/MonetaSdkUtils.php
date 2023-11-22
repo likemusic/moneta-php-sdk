@@ -112,8 +112,8 @@ class MonetaSdkUtils
 	public static function requireView($viewName, $data, $externalPath = null)
 	{
         $result = false;
-        if (!$externalPath && $externalPath != '') {
-            $viewFileName = __DIR__ . $externalPath . $viewName . '.php';
+        if ($externalPath) {
+            $viewFileName = $externalPath . $viewName . '.php';
         }
         else {
             $viewFileName = __DIR__ . self::VIEW_FILES_PATH . $viewName . '.php';
